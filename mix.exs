@@ -2,17 +2,17 @@ defmodule Bowie.MixProject do
   use Mix.Project
 
   def project() do
-    {tag, description} = git_version()
+    {tag, _description} = git_version()
 
     [
       name: "Bowie",
-      description: description() <> description,
+      description: description(),
       package: package(),
       app: :bowie,
       version: tag,
       elixir: "~> 1.7",
       docs: [
-        extras: "README.md",
+        extras: ["README.md"],
         source_url: "https://github.com/skunkwerks/bowie"
       ],
       start_permanent: Mix.env() == :prod,
@@ -56,8 +56,11 @@ defmodule Bowie.MixProject do
 
   defp git_version() do
     # pulls version information from "nearest" git tag or sha hash-ish
-    {hashish, 0} =
-      System.cmd("git", ~w[describe --dirty --abbrev=7 --tags --always --first-parent])
+    hashish =
+      case System.cmd("git", ~w[describe --dirty --abbrev=7 --tags --always --first-parent]) do
+        {tag, 0} -> tag
+        {"", 128} -> "0.0.0"
+      end
 
     full_version = String.trim(hashish)
 
