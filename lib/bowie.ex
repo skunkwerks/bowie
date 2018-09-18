@@ -35,7 +35,23 @@ defmodule Bowie do
 
   ## Examples
 
-   Bowie.db("http://127.0.0.1:5984/", "_users") |> Bowie.start()
+      > Bowie.db("http://admin:passwd@127.0.0.1:5984/", "_users") |> Bowie.start(since: 3)
+        [debug] ICouch request: [head] http://127.0.0.1:5984/_users/
+        [debug] Bowie changes listener #PID<0.436.0> started since 3.
+        [debug] ICouch request: [get] http://127.0.0.1:5984/_users/_changes?feed=continuous&heartbeat=60000&since=3&timeout=7200000
+        [info] Started stream
+        [debug] Received changes for: ["org.couchdb.user:jan"]
+      Elixir.Bowie: %{
+        "changes" => [
+          %{
+            "rev" => "2-448ce420d5fd53b7202f695d009b9265"
+          }
+        ],
+        "deleted" => true,
+        "id" => "org.couchdb.user:jan",
+        "seq" => 5
+      }
+      {:ok, #PID<0.436.0>}
 
   """
   def start(db, opts \\ [include_docs: true]) do
