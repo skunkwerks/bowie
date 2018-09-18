@@ -35,4 +35,15 @@ defmodule BowieTest do
 
     assert Bowie.db("_users") == db()
   end
+
+  test "defines child_spec/1" do
+    assert Bowie.child_spec([]) == %{
+             id: Bowie,
+             restart: :permanent,
+             shutdown: 500,
+             start: {Bowie, :start_link, []},
+             type: :worker
+           }
+  end
+
 end
