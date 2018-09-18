@@ -46,4 +46,19 @@ defmodule BowieTest do
            }
   end
 
+  # test "invokes init/2 callback" do
+  #   Application.put_env(:bowie, __MODULE__.InitBowie, parent: self())
+
+  #   defmodule InitBowie do
+  #     use Phoenix.Bowie, otp_app: :bowie
+
+  #     def init(:supervisor, opts) do
+  #       send(opts[:parent], {self(), :sample})
+  #       {:ok, opts}
+  #     end
+  #   end
+
+  #   {:ok, pid} = InitBowie.start_link()
+  #   assert_receive {^pid, :sample}
+  # end
 end
