@@ -31,7 +31,7 @@ defmodule Bowie do
   end
 
   @doc """
-  Starts a worker, linked directly to the current process.
+  Starts an unsupervised worker. Use `start_link/1` for a supervised connection.
 
   ## Examples
 
@@ -55,7 +55,7 @@ defmodule Bowie do
 
   """
   def start(db, opts \\ [include_docs: true]) do
-    start_link(db, opts)
+    GenServer.start(__MODULE__, [db, opts])
   end
 
   @highlighting [number: :yellow, atom: :cyan, string: :green, nil: :magenta, boolean: :magenta]
@@ -68,6 +68,19 @@ defmodule Bowie do
   use GenServer
   require Logger
 
+  @doc """
+  Starts an OTP supervised worker as part of a larger supervision tree:
+
+  ## Examples
+
+      couch = "http://admin:passwd@127.0.0.1:5984/"
+      db = Bowie.db(couch, "_users")
+      flags = [include_docs: true]
+      args = [db, flags]
+      workers = [%{id: My.Worker, start: {Bowie, :start_link, args}}]
+      options = [strategy: :one_for_one, name: My.Supervisor]
+      Supervisor.start_link( workers, options )
+  """
   def start_link(db, opts \\ [], gen_opts \\ []) do
     GenServer.start_link(__MODULE__, [db, opts], gen_opts)
   end
@@ -85,6 +98,10 @@ defmodule Bowie do
   end
 
   ## Callbacks
+  @callback handle_change(any, pid) :: {:ok, pid}
+  def handle_change(change, pid) do
+    Bowie.debug({pid, change})
+  end
 
   @impl true
   def init([db, opts]) do
