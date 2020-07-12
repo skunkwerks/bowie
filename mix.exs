@@ -2,7 +2,7 @@ defmodule Bowie.MixProject do
   use Mix.Project
 
   def project() do
-    {tag, description} = git_version()
+    [tag, description] = version()
 
     [
       name: "Bowie",
@@ -46,7 +46,18 @@ defmodule Bowie.MixProject do
     ]
   end
 
-  defp git_version() do
+  defp version() do
+    case File.dir?(".git") do
+      false -> from_hex()
+      true -> from_git()
+    end
+  end
+
+  defp from_hex() do
+    File.read!(".version") |> String.split(":")
+  end
+
+  defp from_git() do
     # pulls version information from "nearest" git tag or sha hash-ish
     {hashish, 0} =
       System.cmd("git", ~w[describe --dirty --abbrev=7 --tags --always --first-parent])
@@ -68,8 +79,8 @@ defmodule Bowie.MixProject do
 
     # stash the tag so that it's rolled into the next commit and therefore
     # available in hex packages when git tag info may not be present
-    File.write!(".version", tag_version)
+    File.write!(".version", "#{ tag_version}: #{full_version}")
 
-    {tag_version, full_version}
+    [tag_version, full_version]
   end
 end
