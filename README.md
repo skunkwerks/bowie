@@ -15,7 +15,7 @@ libraries.
 - [x] include fully parsed document bodies, or not
 - [x] jump-start from a given `sequence token` instead of the beginning of
     time
-- [ ] provides overrideable handler
+- [x] provides overrideable handler
 - [ ] inline code documentation
 
 ## Usage
@@ -57,14 +57,14 @@ by adding `bowie` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:bowie, "~> 0.1.0"}
+    {:bowie, "~> 0.9.0"}
   ]
 end
 ```
 
 ## [Apache v2] license
 
-Copyright 2018, SkunkWerks, GmbH
+Copyright 2018-2038, SkunkWerks, GmbH
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
