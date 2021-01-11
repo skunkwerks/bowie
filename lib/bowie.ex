@@ -1,5 +1,4 @@
-# Copyright (c) 2017 MeetNow! GmbH
-# Copyright (c) 2018 SkunkWerks GmbH
+# Copyright (c) 2018-2038 SkunkWerks GmbH
 
 defmodule Bowie do
   @moduledoc """
@@ -12,129 +11,191 @@ defmodule Bowie do
   See the README.md for general usage.
   """
 
+  use GenServer
+  require Logger
+
   # hopefully you are only using this while testing
-  @couch "http://admin:passwd@127.0.0.1:5984/"
+  @couch_uri "http://admin:passwd@localhost:5984/"
+  @couch_db "_users"
+  @couch_changes "/_changes?feed=continuous&heartbeat=45000&include_docs=true&since=0"
+  @couch_inet6 %{tcp_opts: [:inet6]}
+  @changes_uri @couch_uri <> @couch_db <> @couch_changes
+
+  defstruct(
+    # can also be :unix or :http2 see gun docs
+    protocol: :http,
+    # not optional
+    host: nil,
+    # the most relaxed of all TCP ports
+    port: 5984,
+    # the path to be passed to `GET :5984/...`
+    feed: nil,
+    # hide authn headers in an anonymous fun
+    headers_fun: nil,
+    # tweak TLS or TCP options in gen_tcp
+    options: nil,
+    gun_pid: nil,
+    gun_ref: nil,
+    # response headers from CouchDB
+    couch_ref: nil,
+    # binary
+    buffer: ""
+  )
+
+  # GenServer Callbacks
+  @impl true
+  def init([uri, opts]) do
+    {:ok, _changes} = connect(uri, opts)
+  end
+
+  # @impl true
+  # def handle_call(msg, from, state) do
+  #   {:reply, :reply, state}
+  # end
+
+  # GenServer gun events
+  # 200 OK contains the CouchDB supplied headers which includes a handy
+  # couch-request-id for debugging, and when the stream was started
+  @impl true
+  def handle_info({:gun_response, _pid, _ref, :nofin, 200, headers}, state) do
+    {:noreply, %__MODULE__{state | couch_ref: headers}}
+  end
+
+  # any non-200 response from CouchDB is a non-recoverable error
+  @impl true
+  def handle_info({:gun_response, _pid, _ref, :nofin, response, headers}, state) do
+    {:stop, {:invalid_http_response, response}, %__MODULE__{state | couch_ref: headers}}
+  end
+
+  # got a random chunk we only care if it contains a newline
+  @impl true
+  def handle_info({:gun_data, _pid, _ref, :nofin, chunk}, %{buffer: buffer} = state)
+      when is_binary(chunk) do
+    # split by newline and pass full chunks back in buffered state
+    case split_by_newline(buffer, chunk) do
+      # no newline found ergo we are still in the middle of a change.
+      {new_buffer, []} ->
+        {:noreply, %__MODULE__{state | buffer: new_buffer}}
+
+      # a newline was found and our changes need to be processed. Pass them to
+      # our continue callback which will send it to user-specified function.
+      {new_buffer, changes} ->
+        {:noreply, %__MODULE__{state | buffer: new_buffer}, {:continue, {:changes, changes}}}
+    end
+  end
 
   @doc """
-  Prepares an ICouch connection and verifies you have
+  Splits 2 binaries by newline, returning a tuple comprising any remaining
+  buffer, and either the empty list, or a list of changes which were separated
+  by newline.
+  """
+  def split_by_newline(buffer, chunk) when is_binary(buffer) and is_binary(chunk) do
+    # don't trim, we use the "" to identify the end of the chunk
+    case (buffer <> chunk) |> String.split("\n") |> Enum.reverse() do
+      # no changes, so just append to the buffer
+      [buffer | []] -> {buffer, []}
+      # one or more changes, return
+      [head | tail] -> {head, Enum.reverse(tail)}
+    end
+  end
+
+  # we have received one or more complete changes from CouchDB, `{"seq":"..}`
+  # the accumulator of changes has been completed
+  @impl true
+  def handle_continue({:changes, []}, state) do
+    {:noreply, state}
+  end
+
+  # heartbeats come through as empty messages
+  @impl true
+  def handle_continue({:changes, ["" | changes]}, state) do
+    debug(:heartbeat)
+    {:noreply, state, {:continue, {:changes, changes}}}
+  end
+
+  # handle possibly nested changes by sending another continue
+  @impl true
+  def handle_continue({:changes, [<<"{\"seq\":\"", _rest::binary>> = change | changes]}, state) do
+    case Jason.decode(change) do
+      {:ok, json} -> debug(doc: json["id"], seq: json["seq"])
+      _ -> debug(bad_json: change)
+    end
+
+    {:noreply, state, {:continue, {:changes, changes}}}
+  end
+
+  @impl true
+  def handle_continue({:changes, change}, state) do
+    debug(wtf: change)
+    {:noreply, state}
+  end
+
+  # GenServer Client API
+
+  @doc """
+  Start GenServer
+  """
+
+  def start(url \\ @changes_uri, opts \\ %{}) do
+    {:ok, _pid} = GenServer.start_link(__MODULE__, [url, opts])
+  end
+
+  # Internal Helpers
+
+  @doc """
+  Prepares a CouchDB connection and verifies you have
   sufficient permissions to access the database.
 
   ## Examples
 
-      Bowie.db("http://127.0.0.1:5984/", "_users")
-
+  iex> Bowie.connect(
+    "http://admin:passwd@127.0.0.1:5984/_users",
+    since: :now,
+    include_docs: true,
+    heartbeat: 45_000,
+    :inet6)
+  {:ok, %Bowie{}}
   """
-  def db(couch \\ @couch, db) do
-    couch
-    |> ICouch.server_connection()
-    |> ICouch.open_db!(db)
-  end
 
-  @doc """
-  Starts an unsupervised worker. Use `start_link/1` for a supervised connection.
+  def connect(url \\ @changes_uri, _opts \\ %{}) do
+    uri = URI.parse(url)
+    # TODO explode opts
+    # merge over defaults
+    # flatten query string and append to uri path
 
-  ## Examples
+    # because erlang
+    host = String.to_charlist(uri.host)
+    # headers contain authenticaion data which we want to be illegible in
+    # stack traces. instead we make a fun, and pass that around instead.
+    headers = fn -> [{"authorization", "Basic " <> Base.encode64(uri.userinfo)}] end
 
-      > Bowie.db("http://admin:passwd@127.0.0.1:5984/", "_users") |> Bowie.start(since: 3)
-        [debug] ICouch request: [head] http://127.0.0.1:5984/_users/
-        [debug] Bowie changes listener #PID<0.436.0> started since 3.
-        [debug] ICouch request: [get] http://127.0.0.1:5984/_users/_changes?feed=continuous&heartbeat=60000&since=3&timeout=7200000
-        [info] Started stream
-        [debug] Received changes for: ["org.couchdb.user:jan"]
-      Elixir.Bowie: %{
-        "changes" => [
-          %{
-            "rev" => "2-448ce420d5fd53b7202f695d009b9265"
-          }
-        ],
-        "deleted" => true,
-        "id" => "org.couchdb.user:jan",
-        "seq" => 5
-      }
-      {:ok, #PID<0.436.0>}
+    {:ok, pid} = :gun.open(host, uri.port, @couch_inet6)
+    {:ok, protocol} = :gun.await_up(pid)
 
-  """
-  def start(db, opts \\ [include_docs: true]) do
-    GenServer.start(__MODULE__, [db, opts])
+    feed = String.to_charlist(uri.path <> "?" <> uri.query)
+    ref = :gun.get(pid, feed, headers.())
+
+    {:ok,
+     %__MODULE__{
+       protocol: protocol,
+       host: host,
+       port: uri.port,
+       feed: feed,
+       headers_fun: headers,
+       options: @couch_inet6,
+       gun_pid: pid,
+       gun_ref: ref
+     }}
   end
 
   @highlighting [number: :yellow, atom: :cyan, string: :green, nil: :magenta, boolean: :magenta]
   def debug(any) do
-    IO.inspect(any, label: __MODULE__, syntax_colors: @highlighting, width: 0)
-  end
-
-  ## GenServery
-
-  use GenServer
-  require Logger
-
-  @doc """
-  Starts an OTP supervised worker as part of a larger supervision tree:
-
-  ## Examples
-
-      couch = "http://admin:passwd@127.0.0.1:5984/"
-      db = Bowie.db(couch, "_users")
-      flags = [include_docs: true]
-      args = [db, flags]
-      workers = [%{id: My.Worker, start: {Bowie, :start_link, args}}]
-      options = [strategy: :one_for_one, name: My.Supervisor]
-      Supervisor.start_link( workers, options )
-  """
-  def start_link(db, opts \\ [], gen_opts \\ []) do
-    GenServer.start_link(__MODULE__, [db, opts], gen_opts)
-  end
-
-  def child_spec(opts) do
-    # the only difference to the typical Supervisor.child_spec/1 is
-    # that Bowie doesn't wrap the opts in list before passing them on.
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, opts},
-      type: :worker,
-      restart: :permanent,
-      shutdown: 500
-    }
-  end
-
-  ## Callbacks
-  @callback handle_change(any, pid) :: {:ok, pid}
-  def handle_change(change, pid) do
-    Bowie.debug({pid, change})
-  end
-
-  @impl true
-  def init([db, opts]) do
-    {seq, _opts} = Keyword.pop(opts, :since)
-
-    Logger.debug(
-      "Bowie changes listener #{inspect(self())} started" <>
-        "#{if seq == nil, do: "", else: " since "}#{if seq != nil, do: seq, else: ""}."
+    IO.inspect(any,
+      label: __MODULE__,
+      syntax_colors: @highlighting,
+      width: 0,
+      limit: :infinity,
+      printable_limit: :infinity
     )
-
-    {:ok, _} = Bowie.Changes.start_link(db, opts)
-  end
-end
-
-defmodule Bowie.Changes do
-  @moduledoc """
-  Supporting module for Bowie to provide a separate mailbox queue for
-  received changes independent of the ibrowse worker that does the
-  actual work. This is the functionality you override with your own
-  handle_change functionality.
-  """
-
-  use ChangesFollower
-
-  def start_link(db, opts) do
-    ChangesFollower.start_link(__MODULE__, [db, opts, self()])
-  end
-
-  def init([db, opts, pid]),
-    do: {:ok, db, opts, pid}
-
-  def handle_change(change, pid) do
-    Bowie.debug(change)
-    {:ok, pid}
   end
 end

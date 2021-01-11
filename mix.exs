@@ -10,7 +10,7 @@ defmodule Bowie.MixProject do
       description: "bowie " <> description,
       package: package(),
       app: :bowie,
-      elixir: "~> 1.11",
+      elixir: "~> 1.10",
       docs: [
         extras: ["README.md"],
         source_url: "https://github.com/skunkwerks/bowie"
@@ -37,11 +37,11 @@ defmodule Bowie.MixProject do
 
   defp deps() do
     [
-      {:bypass, "~> 1.0", only: :test},
+      # {:bypass, "~> 1.0", only: :test},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.22", only: [:dev], runtime: false},
-      {:ibrowse, "~> 4.4"},
-      {:icouch, "~> 0.6"},
+      {:gun, git: "https://github.com/ninenines/gun.git", tag: "2.0.0-rc.1"},
+      {:jason, "~> 1.2"},
       {:recon, "~> 2.5", only: [:dev], runtime: false}
     ]
   end
@@ -79,7 +79,7 @@ defmodule Bowie.MixProject do
 
     # stash the tag so that it's rolled into the next commit and therefore
     # available in hex packages when git tag info may not be present
-    File.write!(".version", "#{ tag_version}: #{full_version}")
+    File.write!(".version", "#{tag_version}: #{full_version}")
 
     [tag_version, full_version]
   end
