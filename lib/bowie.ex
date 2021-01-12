@@ -18,9 +18,9 @@ defmodule Bowie do
   defstruct [:conn, :db, :query, :headers, :last_seq, requests: %{}]
 
   # hopefully you are only using this while testing
-  @couch_uri "http://admin:passwd@127.0.0.1:5984/"
+  @couch_uri "http://admin:passwd@localhost:5984/"
   @couch_db "_users"
-  @couch_changes "/_changes?feed=continuous&heartbeat=45000&since=now"
+  @couch_changes "/_changes?feed=continuous&heartbeat=45000&include_docs=true&since=now"
   @couch_transport transport_opts: [{:inet6, true}]
   @changes_uri @couch_uri <> @couch_db <> @couch_changes
   @doc """
@@ -29,7 +29,7 @@ defmodule Bowie do
 
   ## Examples
 
-  Bowie.connect!("http://admin:passwd@127.0.0.1:5984/", "_users")
+  Bowie.connect!("http://admin:passwd@127.0.0.1:5984/_users")
 
   """
 
@@ -52,7 +52,7 @@ defmodule Bowie do
   end
 
   def changes(pid) do
-    GenServer.call(pid, {:changes})
+    GenServer.cast(pid, {:changes})
   end
 
   def request(pid, method \\ "GET", path, headers \\ [], body \\ nil) do
@@ -79,26 +79,26 @@ defmodule Bowie do
     end
   end
 
-  @impl true
-  def handle_call({:changes}, from, state) do
-    Logger.debug("got #{inspect(state)}")
-    # In both the successful case and the error case, we make sure to update the connection
-    # struct in the state since the connection is an immutable data structure.
-    path = "/" <> state.db <> "/_changes?" <> state.query
+#   @impl true
+#   def handle_cast({:changes}, from, state) do
+#     Logger.debug("got #{inspect(state)}")
+#     # In both the successful case and the error case, we make sure to update the connection
+#     # struct in the state since the connection is an immutable data structure.
+#     path = "/" <> state.db <> "/_changes?" <> state.query
 
-    case Mint.HTTP.request(state.conn, "GET", path, state.headers, nil) do
-      {:ok, conn, request_ref} ->
-        state = put_in(state.conn, conn)
-        # We store the caller this request belongs to and an empty map as the response.
-        # The map will be filled with status code, headers, and so on.
-        state = put_in(state.requests[request_ref], %{from: from, response: %{}})
-        {:noreply, state}
+#     case Mint.HTTP.request(state.conn, "GET", path, state.headers, nil) do
+#       {:ok, conn, request_ref} ->
+#         state = put_in(state.conn, conn)
+#         # We store the caller this request belongs to and an empty map as the response.
+#         # The map will be filled with status code, headers, and so on.
+#         state = put_in(state.requests[request_ref], %{from: from, response: %{}})
+#         {:noreply, state}
 
-      {:error, conn, reason} ->
-        state = put_in(state.conn, conn)
-        {:reply, {:error, reason}, state}
-    end
-  end
+#       {:error, conn, reason} ->
+#         state = put_in(state.conn, conn)
+#         {:reply, {:error, reason}, state}
+#     end
+#   end
 
   @impl true
   def handle_call({:request, method, path, headers, body}, from, state) do
@@ -116,6 +116,28 @@ defmodule Bowie do
         state = put_in(state.conn, conn)
         {:reply, {:error, reason}, state}
     end
+  end
+
+  @impl true
+ def handle_cast({:changes}, state) do
+    Logger.debug("got #{inspect(state)}")
+    {:noreply, state}
+    # In both the successful case and the error case, we make sure to update the connection
+    # struct in the state since the connection is an immutable data structure.
+    # path = "/" <> state.db <> "/_changes?" <> state.query
+
+    # case Mint.HTTP.request(state.conn, "GET", path, state.headers, nil) do
+    #   {:ok, conn, request_ref} ->
+    #     state = put_in(state.conn, conn)
+    #     # We store the caller this request belongs to and an empty map as the response.
+    #     # The map will be filled with status code, headers, and so on.
+    #     state = put_in(state.requests[request_ref], %{from: from, response: %{}})
+    #     {:noreply, state}
+
+    #   {:error, conn, reason} ->
+    #     state = put_in(state.conn, conn)
+    #     {:reply, {:error, reason}, state}
+    # end
   end
 
   @impl true
