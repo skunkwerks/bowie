@@ -6,7 +6,7 @@ defmodule Bowie do
 
   While Bowie can be used directly, in the iex console, it is designed to drop
   into a typical OTP Supervisor tree and receive a stream of changes from it's
-  linked ibrowse worker.
+  linked worker.
 
   See the README.md for general usage.
   """
@@ -117,7 +117,7 @@ defmodule Bowie do
   @impl true
   def handle_continue({:changes, [<<"{\"seq\":\"", _rest::binary>> = change | changes]}, state) do
     case Jason.decode(change) do
-      {:ok, json} -> debug(doc: json["id"], seq: json["seq"])
+      {:ok, json} -> debug(doc: json)
       _ -> debug(bad_json: change)
     end
 
