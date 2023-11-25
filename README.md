@@ -47,6 +47,24 @@ args = [db, flags]
 workers = [%{id: My.Worker, start: {Bowie, :start_link, args}}]
 options = [strategy: :one_for_one, name: My.Supervisor]
 Supervisor.start_link( workers, options )
+
+...
+
+19:13:22.072 [debug] Received changes for: ["_design/_auth"]
+Elixir.Bowie: %{
+  "changes" => [
+    %{
+      "rev" => "1-753ae0157a8b1a22339f3c0ef4f1bf19"
+    }
+  ],
+  "doc" => %ICouch.Document{
+    id: "_design/_auth",
+    rev: "1-753ae0157a8b1a22339f3c0ef4f1bf19",
+    fields: %{
+      "_id" => "_design/_auth",
+      "_rev" => "1-753ae0157a8b1a22339f3c0ef4f1bf19",
+      "language" => "javascript",
+      ...
 ```
 
 ## Installation
@@ -57,7 +75,7 @@ by adding `bowie` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:bowie, "~> 0.9.0"}
+    {:bowie, "~> 0.10.0"}
   ]
 end
 ```

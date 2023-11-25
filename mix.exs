@@ -10,7 +10,7 @@ defmodule Bowie.MixProject do
       description: "bowie " <> description,
       package: package(),
       app: :bowie,
-      elixir: "~> 1.10",
+      elixir: "~> 1.15",
       docs: [
         extras: ["README.md"],
         source_url: "https://github.com/skunkwerks/bowie"
@@ -37,9 +37,9 @@ defmodule Bowie.MixProject do
 
   defp deps() do
     [
-      {:bypass, "~> 1.0", only: :test},
-      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
-      {:ex_doc, "~> 0.22", only: [:dev], runtime: false},
+      {:bypass, "~> 2.1", only: :test},
+      {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
+      {:ex_doc, "~> 0.30", only: [:dev], runtime: false},
       {:ibrowse, "~> 4.4"},
       {:icouch, "~> 0.6"},
       {:recon, "~> 2.5", only: [:dev], runtime: false}
