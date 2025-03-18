@@ -10,7 +10,7 @@ defmodule Bowie.MixProject do
       description: "bowie " <> description,
       package: package(),
       app: :bowie,
-      elixir: "~> 1.15",
+      elixir: "~> 1.17",
       docs: [
         extras: ["README.md"],
         source_url: "https://github.com/skunkwerks/bowie"
